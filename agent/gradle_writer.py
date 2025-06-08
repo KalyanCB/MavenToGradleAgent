@@ -10,7 +10,7 @@ def remove_utf8_bom(filepath):
         with open(filepath, 'wb') as f:
             f.write(content)
 
-def write_build_gradle(deps, output_path, main_class=None):
+def write_build_gradle(deps, output_path, main_class=None, known_modules=None):
     """
     Generates a Groovy DSL-compliant build.gradle file.
 
@@ -18,7 +18,10 @@ def write_build_gradle(deps, output_path, main_class=None):
         deps (List[Tuple[str, str, Optional[str]]]): Maven dependencies as (group, artifact, version).
         output_path (str): File path to write build.gradle.
         main_class (Optional[str]): Fully qualified main class name, if available.
+        known_modules (List[str]): Names of known modules in the project.
     """
+
+    known_modules = known_modules or []
 
     DEFAULT_VERSIONS = {
         "spring-boot-starter-web": "3.2.5",
@@ -32,8 +35,13 @@ def write_build_gradle(deps, output_path, main_class=None):
     lines = [
         "plugins {",
         "    id 'java'",
-        "    id 'application'",
-        "}",
+    ]
+
+    if main_class:
+        lines.append("    id 'application'")
+    lines.append("}")
+
+    lines += [
         "",
         "repositories {",
         "    mavenCentral()",
@@ -43,12 +51,17 @@ def write_build_gradle(deps, output_path, main_class=None):
     ]
 
     for group, artifact, version in deps:
+        if artifact in known_modules:
+            lines.append(f"    implementation project(':{artifact}')")
+            continue
+
         if not version:
             version = DEFAULT_VERSIONS.get(artifact)
             if version:
                 print(f"ℹ️  Using default version '{version}' for {artifact}")
             else:
                 print(f"⚠️  No version found for {artifact}. You may need to add it manually.")
+
         if version:
             lines.append(f"    implementation '{group}:{artifact}:{version}'")
         else:
@@ -69,7 +82,7 @@ def write_build_gradle(deps, output_path, main_class=None):
         f.write("\n".join(lines).strip() + "\n")
 
     remove_utf8_bom(output_path)
-    log_success("✅ build.gradle written.")
+    log_success(f"✅ build.gradle written at {output_path}")
 
 def write_fixed(path, content, backup=True):
     if backup and os.path.exists(path):

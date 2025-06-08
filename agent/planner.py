@@ -1,6 +1,7 @@
 import os
 from agent import git_handler, pom_parser, gradle_writer, builder, fixer
-from agent.multi_module import detector
+from agent.multi_module import detector, migrator  # <-- Add this
+from agent.utils import xml_utils  # for parsing modules from pom.xml
 
 
 def run_migration():
@@ -13,8 +14,15 @@ def run_migration():
     # 1. Clone the GitHub repository
     git_handler.clone_repo(repo_dir)
 
-    # 2. Parse dependencies from pom.xml
+    # 2. Check for multi-module project
     pom_path = os.path.join(repo_dir, "pom.xml")
+    if detector.is_multi_module(pom_path):
+        print("📦 Detected multi-module Maven project.")
+        migrator.migrate(repo_dir, branch, base_branch)
+        return
+
+    # ---- Single-module logic continues here ----
+
     src_path = os.path.join(repo_dir, "src", "main", "java")
     deps = pom_parser.parse_dependencies(pom_path)
 
