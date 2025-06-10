@@ -1,7 +1,7 @@
 import os
 from agent import git_handler, pom_parser, gradle_writer, builder, fixer
-from agent.multi_module import detector, migrator  # <-- Add this
-from agent.utils import xml_utils  # for parsing modules from pom.xml
+from agent.multi_module import detector, migrator
+from agent.utils import xml_utils
 
 
 def run_migration():
@@ -22,9 +22,10 @@ def run_migration():
         return
 
     # ---- Single-module logic continues here ----
-
     src_path = os.path.join(repo_dir, "src", "main", "java")
-    deps = pom_parser.parse_dependencies(pom_path)
+    deps, props = pom_parser.parse_dependencies(pom_path)
+    plugin_mgmt = pom_parser.parse_plugin_management(pom_path)
+    dep_mgmt = pom_parser.parse_dependency_management(pom_path)
 
     # 3. Attempt to extract main class
     main_class = detector.extract_main_class(pom_path, src_path)
@@ -36,13 +37,21 @@ def run_migration():
     gradle_path = os.path.join(repo_dir, "build.gradle")
     settings_path = os.path.join(repo_dir, "settings.gradle")
     gitignore_path = os.path.join(repo_dir, ".gitignore")
-
     project_name = os.path.basename(os.path.abspath(repo_dir))
-    gradle_writer.write_build_gradle(deps, gradle_path, main_class)
+
+    gradle_writer.write_build_gradle(
+        deps,
+        gradle_path,
+        main_class=main_class,
+        known_modules=[],
+        properties=props,
+        dependency_mgmt=dep_mgmt,
+        plugin_mgmt=plugin_mgmt
+    )
     gradle_writer.write_settings_gradle(settings_path, project_name)
     gradle_writer.write_gitignore(gitignore_path)
 
-    # 6. Generate Gradle wrapper (fail fast if build.gradle is broken)
+    # 6. Generate Gradle wrapper
     builder.ensure_gradle_wrapper(repo_dir)
 
     # 7. Commit all Gradle-related files including wrapper
